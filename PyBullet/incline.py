@@ -1,47 +1,58 @@
 import pybullet as p
+# from OpenGL.arrays import GLbyteArray
 import cv2
 import time
 import pybullet_data
 import os
-
+import pickle
+import numpy as np
+from OpenGL.GL import *
+from OpenGL.GLU import *
+from OpenGL.GLUT import *
+# import pygame, pygame.image
+# from pygame.locals import *
 
 # Link to imported items
 # link = '/home/gpaps/PycharmProjects/Msc_Thesis/bullet3-master/data/'
 
 link = '/home/evangeloit/Desktop/py-msc/bullet3-2.88/data'
-# item_link = '/home/gpaps/PycharmProjects/Msc_Thesis/PyBullet'
-item_link = '/home/evangeloit/Desktop/py-msc/Msc_Thesis/PyBullet'
-
+item_link = '/home/evangeloit/Desktop/py-msc/Msc_Thesis/PyBullet/Objects'
 
 # Set Environment "Constants"
-# physicsClient = \
+# physicsClient = p.connect(p.COV_ENABLE_GUI)
 p.connect(p.GUI)
+
 p.setGravity(0, 0, -9.81)
 # planeId = p.loadURDF(link+"/plane100.urdf")
 
+# Configure settings of the built-in OpenGL visualizer, such as enabling or disabling wireframe...This is useful since some laptops or Desktop GUIs have performance issues with our OpenGL 3 visualizer.
+p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 1)
+p.configureDebugVisualizer(p.COV_ENABLE_GUI, 2)  # 0=False, 1=True(without/UI, 2=True(with/UI))
 
-# Items Position - # https://www.andre-gaschler.com/rotationconverter/
-cubeStartPos = [0, -0.3, 0.015]
-cubeStartOrientation = p.getQuaternionFromEuler([0, 0, 0])
-cubeStartPos1 = [0, 1.6, 0.75] 			#[0, 5.2, 2.13]
-cubeStartOrientation1 = p.getQuaternionFromEuler([0, 0.5, -1.6])	#([0, 0.5, -1.6])
+# Render - Dimension
+Render_width = 1280
+Render_height = 720
 
+# Items Position URDFs - # https://www.andre-gaschler.com/rotationconverter/
+cubeStartPos = [0.0, -0.3, 0.015]
+cubeStartOrientation = p.getQuaternionFromEuler([0.0, 0.0, 0.0])
+wdn_cubeStartPos1 = [0.0, 0.7, 0.4] 			# [0, 5.2, 2.13]
+wdn_cubeStartOrientation1 = p.getQuaternionFromEuler([0.0, 0.5, -1.6])  # ([0, 0.5, -1.6])
 
-# Items
-r_box = p.loadURDF(item_link+"/cube.urdf", cubeStartPos, cubeStartOrientation)
-w_box = p.loadURDF(item_link+"/cube1.urdf", cubeStartPos1, cubeStartOrientation1)
+# Items - Object - Boxe's - Incline
+r_box = p.loadURDF(item_link+"/cube.urdf", cubeStartPos, cubeStartOrientation,)
+w_box = p.loadURDF(item_link+"/cube1.urdf", wdn_cubeStartPos1, wdn_cubeStartOrientation1)#, globalScaling=1)
 
-
-# Import .obj-file(Incline-RigidB), Collision+Visual-> Multibody
+# Import .obj-file(Incline-RigidB), Collision+Visual --> Multibody
 shift = [-.5, -0.11, 0.0]
 meshScale = [1, 1, 1]
 
 
 # the visual shape and collision shape can be re-used by all createMultiBody instances (instancing)
-collisionShapeId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=item_link+"/inclinedCM.obj",
+collisionShapeId = p.createCollisionShape(shapeType=p.GEOM_MESH, fileName=item_link+"/inclinedCM100.obj",
 										  collisionFramePosition=shift, meshScale=meshScale)
 
-visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=item_link+"/inclinedCM.obj",
+visualShapeId = p.createVisualShape(shapeType=p.GEOM_MESH, fileName=item_link+"/inclinedCM100.obj",
 									rgbaColor=[1, 1, 1, 0.9], specularColor=[0.4, 0.4, 0],
 									visualFramePosition=shift, meshScale=meshScale)
 
@@ -49,14 +60,13 @@ incline = p.createMultiBody(baseMass=0, basePosition=[0, 0, 0.1],
 							baseOrientation=[1, 1, 1, 1], baseInertialFramePosition=[0, 0, 0],
 							baseCollisionShapeIndex=collisionShapeId, baseVisualShapeIndex=visualShapeId,
 							useMaximalCoordinates=True)
-# Dynamics
+
+# ADDING Dynamics to Objects through  GUI
 #p.changeDynamics(incline ,-1, lateralFriction= 0.5)
-
-
 # Create UI -edita
 inclineUI = p.addUserDebugParameter("Incline friction", 0, 1, 0.5)
 r_boxUI = p.addUserDebugParameter("R_box friction", 0, 1, 0.5)
-w_boxUI = p.addUserDebugParameter("G_Box friction", 0, 1, 0.8)
+w_boxUI = p.addUserDebugParameter("Wd_Box friction", 0, 1, 0.8)
 # spinningFrictionId = p.addUserDebugParameter("spinning friction", 0, 1, 0.03)
 
 
@@ -70,23 +80,45 @@ img_path ='/home/evangeloit/Desktop/py-msc/Imgs'
 snap = 0
 # raw_input('Press enter to continue...')
 
-# Synthetic Camera Rendering
-p.computeViewMatrix()
+# pickle-rick load K-matrix
+with open("/home/evangeloit/Desktop/py-msc/Calibration/calib_02/wide_dist_pickle.p", "rb") as f:
+    data = pickle.load(f)
 
-p.computeProjectionMatrixFOV()
+K = data["mtx"]
 
+# __Synthetic Camera Rendering__ #
+# Compute _PROJECTION_ Matrix FOV
+fx = K[0, 0]
+fy = K[1, 1]
+fov = 2*np.arctan(0.5*Render_height/fy)*180/np.pi
+aspect = 16./9.
+nearVal = 0.1
+farVal = 100
+fov_project_matrix = p.computeProjectionMatrixFOV(fov=fov, aspect=aspect, nearVal=nearVal, farVal=farVal)
 
-# Set Camera potition -observer-
-distance = 0.925	#6
-yaw = -270.80 #90
-height = -88.5  #40
-p.resetDebugVisualizerCamera(distance, yaw, height, [0.0, 0.4625, 0.0]) #x,2,z
+# Compute - View - Matrix # _COMPUTE VIEW MATRIX_
+cameraEyePosition = [1, 0, 0]
+cameraTargetPosition = [0, 1, 0]
+cameraUpVector = [0, 0, 1]
+view_matrix = p.computeViewMatrix(cameraEyePosition, cameraTargetPosition, cameraUpVector)
 
+# Compute - View - Matrix # _COMPUTE PROJECTION MATRIX_
+# p.computeProjectionMatrix
 
+# Set Camera position -observer- __ResetDebugVisualizerCamera__ and __COMPUTE VIEW MATRIX FROM YAW PITCH ROLL__
+# cam_dist = 0.925  # 6
+# cam_yaw = -270.80  # 90
+# cam_pitch = -88.5  # 40
+# cameraTargetPosition = [0.0, 0.4625, 0.0]
+# # p.resetDebugVisualizerCamera(cam_dist, cam_yaw, cam_pitch, cameraTargetPosition)  #x,2,z
+# base_pos, orn = p.getBasePositionAndOrientation(w_box)
+# view_matrixRPY = p.computeViewMatrixFromYawPitchRoll(cameraTargetPosition=base_pos, distance=cam_dist,
+#                                             yaw=cam_yaw,
+# 											pitch=cam_pitch,
+# 											roll=0,
+#                                             upAxisIndex=2)
 
-
-
-# for real Time, set_RealTime 1=true, 0=false
+# For real Time, set_RealTime 1=true or 0=false
 useRealTimeSimulation = 1
 if (useRealTimeSimulation):
     p.setRealTimeSimulation(1)
@@ -95,9 +127,8 @@ if (useRealTimeSimulation):
 while 1:
 
     if (useRealTimeSimulation):
-		# p.setGravity(0, 0, -9.81)
+# p.setGravity(0, 0, -9.81)
 		time.sleep(1./240.) # Time in seconds. (premade_time(0.01))
-
 
 # for i in range(0,1000):
 # 		# Simulation and Params
@@ -105,36 +136,36 @@ while 1:
 # 		time.sleep(1./240.)
 # 		# p.setTimeStep()
 
-		# read UI
+		# Read - Viz on  GUI
 		incline_frict = p.readUserDebugParameter(inclineUI)
 		r_frict = p.readUserDebugParameter(r_boxUI)
-		g_frict = p.readUserDebugParameter(w_boxUI)
+		w_frict = p.readUserDebugParameter(w_boxUI)
 		# spinningFriction = p.readUserDebugParameter(spinningFrictionId)
 
-		# Dynamics_UI
+		# Dynamics_GUI
 		p.changeDynamics(incline,0, lateralFriction = 0.5)
-		p.changeDynamics(w_box, -1, lateralFriction = g_frict)
 		p.changeDynamics(r_box, -1, lateralFriction = r_frict)
+		p.changeDynamics(w_box, -1, lateralFriction = w_frict)
 
-		# get
+		# Get Dynamics Info - Get Camera Viz - Write - Debug
 		pos, orn = p.getBasePositionAndOrientation(r_box)
 		pos1, orn1 = p.getBasePositionAndOrientation(w_box)
 
-		velocity = p.getBaseVelocity(r_box, )
-		p.getBaseVelocity(w_box, )
-
+		r_box_velocity = p.getBaseVelocity(r_box, )
+		w_box_Velocity = p.getBaseVelocity(w_box, )
+		# It's for Link Description,
 		info = p.getDynamicsInfo(w_box,-1)
 
-		# getDebugVisualizerCamera
-		# k = p.getCameraImage(width=128, height=128, viewMatrix=[10., 10., 10., 1.])
-		# img_rgb = cv2.cvtColor(k[2], cv2.COLOR_BGR2RGB)
-		# cv2.imshow('img_rgb', img_rgb )
+		# getDebugVisualizerCamera											viewMatrix=[10., 10., 10., 1] or  view_matrixRPY
+		k = p.getCameraImage(width=Render_width, height=Render_height, viewMatrix=view_matrix, projectionMatrix=fov_project_matrix, renderer=p.ER_BULLET_HARDWARE_OPENGL)
+		img_rgb = cv2.cvtColor(k[2], cv2.COLOR_BGR2RGB)
+		cv2.imshow('img_rgb', img_rgb )
 
 		# Get- Viz- Write- Debug-
-		img1 = p.getCameraImage(width=128, height=128)
-		img_rgb = cv2.cvtColor(img1[2], cv2.COLOR_BGR2RGB)
+		# img1 = p.getCameraImage(width=128, height=128)
+		# img_rgb = cv2.cvtColor(img1[2], cv2.COLOR_BGR2RGB)
 		# cv2.imshow('img_rgb', img_rgb)
-		# cv2.waitKey(300)
+		cv2.waitKey(300)
 
 		#  #if smth for discreete steps take a pic (na min pairnw oles tis eikones)
 		# cap = img_path+'/img%03d.png' % snap
@@ -146,9 +177,5 @@ while 1:
 
 # p.disconnect(0)
 
-# Projection matrix
-# viewMatrix = p.computeViewMatrix(positionCamera, orientationCamera, [0, 0, 1])
-# aspect = x / y;
-# projectionMatrix = p.computeProjectionMatrixFOV(fov, aspect, nearPlane, farPlane);
-#
+
 # img_arr = p.getCameraImage(x, y, viewMatrix, projectionMatrix, [0, 1, 0])

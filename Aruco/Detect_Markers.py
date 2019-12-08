@@ -9,21 +9,21 @@ import yaml
 # importing aruco dictionary
 aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_6X6_50)
 
-# Aruco_generator_ | Create_Markers | its_def
+# Aruco_generator_ | Create_Markers | its_def |
 # aruco_gene(aruco_dict, 11, 200)
-
+#/home/evangeloit/Desktop/py-msc/Calibration/Videos_Imgs/GoProHero7/known
 # Video-Capture
-cap = cv2.VideoCapture('/home/evangeloit/Desktop/py-msc/Videos/GoProHero7/GH010242.MP4')
+cap = cv2.VideoCapture('/home/evangeloit/Desktop/py-msc/Calibration/Videos_Imgs/GoProHero7/known/GH010298.MP4')
 # cap = cv2.VideoCapture(0)
 
-# calibration parameters
+# Calibration parameters
 calibrationFile = "gopro7b.yaml"
 calibrationParams = cv2.FileStorage(calibrationFile, cv2.FILE_STORAGE_READ)
 camera_matrix = calibrationParams.getNode("camera_matrix").mat()
 dist_coeffs = calibrationParams.getNode("distortion_coefficients").mat()
 
 if camera_matrix is None or dist_coeffs is None:
-        print("Calibration issue. Remove ./file.ymal and recalibrate your camera with CalibrateCamera.py.")
+        print("Calibration issue. Remove ./file.yaml and recalibrate your camera with CalibrateCamera.py.")
         exit()
 
 # side length of the marker in meter
@@ -31,7 +31,7 @@ markerLength = 0.53  # Measurement unit is metre.(cm =5.3)
 arucoParams = cv2.aruco.DetectorParameters_create()
 
 # Create Null(None)-vectors using for rotations and translations for postures
-# tvecs, rvecs = None, None
+tvecs, rvecs = None, None
 
 while True:
 
